@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-World 77 GHz Radar Highway Collision Avoidance Simulation</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+      background: #050811;
+      color: #f1f5f9;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+    #canvas-container { width: 100vw; height: 100vh; display: block; }
+
+    /* Top Left Control HUD */
+    .hud-left {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      width: 370px;
+      background: rgba(10, 18, 34, 0.90);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+      z-index: 10;
+    }
+    .hud-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 4px;
+    }
+    .hud-sub {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    .sec-hdr {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #fbbf24;
+      margin: 12px 0 6px 0;
+      border-bottom: 1px solid rgba(251, 191, 36, 0.25);
+      padding-bottom: 3px;
+    }
+    .btn-mode {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-mode:hover, .btn-mode.active {
+      background: rgba(2, 132, 199, 0.45);
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+    .badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 99px;
+      font-weight: 700;
+    }
+    .badge-danger { background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
+    .badge-safe { background: rgba(34, 197, 94, 0.25); color: #86efac; }
+    .badge-scan { background: rgba(56, 189, 248, 0.25); color: #7dd3fc; }
+
+    .sim-btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .action-btn {
+      padding: 9px;
+      border-radius: 8px;
+      border: none;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-trigger { background: #eab308; color: #0f172a; }
+    .btn-trigger:hover { background: #facc15; }
+    .btn-reset { background: #334155; color: #f8fafc; }
+    .btn-reset:hover { background: #475569; }
+
+    .cam-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .cam-btn {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      color: #cbd5e1;
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .cam-btn:hover { border-color: #38bdf8; color: #fff; }
+
+    /* Top Center Alert Banner */
+    .alert-banner {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      border-radius: 99px;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 2px solid #22c55e;
+      color: #4ade80;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+      z-index: 10;
+      transition: all 0.25s;
+    }
+
+    /* Bottom Right Radar PPI & Telemetry HUD */
+    .hud-right {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      width: 360px;
+      background: rgba(10, 18, 34, 0.92);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+      z-index: 10;
+    }
+    #radar-ppi {
+      width: 100%;
+      height: 190px;
+      background: #04070f;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 8px;
+      display: block;
+      margin-bottom: 10px;
+    }
+    .telem-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+    .telem-item {
+      background: rgba(15, 23, 42, 0.8);
+      padding: 6px 10px;
+      border-radius: 6px;
+      border-left: 3px solid #38bdf8;
+    }
+    .telem-lbl { font-size: 10px; color: #94a3b8; }
+    .telem-val { font-size: 13px; font-weight: 700; color: #f8fafc; }
+  </style>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <div class="alert-banner" id="status-banner">
+    ADAS STATUS: CRUISING AT 90 KM/H | ELECTRONIC BEAM STEERING ACTIVE (+6&deg; / 31-BEAM SCAN)
+  </div>
+
+  <!-- Left Controls -->
+  <div class="hud-left">
+    <div class="hud-title">Real-World Highway ADAS Radar Sim</div>
+    <div class="hud-sub">
+      77 GHz FMCW Phased-Array Radar (1&times;4 Patch + Metasurface on Front Bumper) preventing Cut-In &amp; Multi-Lane Collisions.
+    </div>
+
+    <div class="sec-hdr">1. Select Antenna Beam Mode</div>
+    <button class="btn-mode" id="mode-0" onclick="setRadarMode(0)">
+      <span>Fixed Broadside Beam (0&deg; Only)</span>
+      <span class="badge badge-danger">Blind Spot Risk</span>
+    </button>
+    <button class="btn-mode" id="mode-6" onclick="setRadarMode(6)">
+      <span>Steered Beam (+6&deg; Tilt / Copper Bridge)</span>
+      <span class="badge badge-safe">Cut-In Protected</span>
+    </button>
+    <button class="btn-mode active" id="mode-31" onclick="setRadarMode(31)">
+      <span>31-Beam Phased Sector Scan (&plusmn;45&deg;)</span>
+      <span class="badge badge-scan">4/4 Vehicles</span>
+    </button>
+
+    <div class="sec-hdr">2. Real-World Collision Scenario Test</div>
+    <p style="font-size:11.5px; color:#cbd5e1; margin-bottom:6px; line-height:1.4;">
+      Click <b>"Trigger Cut-In Maneuver"</b> to make <b>Car A</b> (Left Lane) suddenly swerve into your lane. Compare what happens in <b>0&deg; Fixed Mode</b> vs. <b>+6&deg; / 31-Beam Steered Mode</b>!
+    </p>
+    <div class="sim-btn-row">
+      <button class="action-btn btn-trigger" onclick="triggerCutIn()">⚠️ Trigger Cut-In</button>
+      <button class="action-btn btn-reset" onclick="resetScenario()">🔄 Reset Highway</button>
+    </div>
+
+    <div class="sec-hdr">3. Camera Viewpoints (Scroll to Zoom)</div>
+    <div class="cam-row">
+      <button class="cam-btn" onclick="setCameraView('chase')">Chase View</button>
+      <button class="cam-btn" onclick="setCameraView('bumper')">Bumper Close-Up</button>
+      <button class="cam-btn" onclick="setCameraView('top')">Top-Down Map</button>
+    </div>
+  </div>
+
+  <!-- Right Live MATLAB-Style Sector Scan & Telemetry -->
+  <div class="hud-right">
+    <div style="font-size:12px; font-weight:700; color:#7dd3fc; margin-bottom:6px;">
+      LIVE 77 GHz RADAR SECTOR MAP (CA-CFAR + &alpha;-&beta; TRACKER)
+    </div>
+    <canvas id="radar-ppi" width="330" height="190"></canvas>
+    <div class="telem-grid">
+      <div class="telem-item">
+        <div class="telem-lbl">Ego Vehicle Speed</div>
+        <div class="telem-val" id="val-speed">90 km/h (25 m/s)</div>
+      </div>
+      <div class="telem-item">
+        <div class="telem-lbl">Detected Targets</div>
+        <div class="telem-val" id="val-targets">4 / 4 Vehicles</div>
+      </div>
+      <div class="telem-item">
+        <div class="telem-lbl">Primary Threat Range</div>
+        <div class="telem-val" id="val-range">38.0 m (Car A)</div>
+      </div>
+      <div class="telem-item">
+        <div class="telem-lbl">AEB Braking System</div>
+        <div class="telem-val" id="val-aeb">STANDBY (SAFE)</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x050811);
+    scene.fog = new THREE.FogExp2(0x050811, 0.0045);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 600);
+    camera.position.set(0, 26, -38);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 2, 28);
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xdbeafe, 0.7));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+    sun.position.set(30, 80, -20);
+    scene.add(sun);
+
+    // --- 3-Lane Highway Geometry ---
+    const roadGroup = new THREE.Group();
+    scene.add(roadGroup);
+
+    const roadGeo = new THREE.PlaneGeometry(36, 400);
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 });
+    const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+    roadMesh.rotation.x = -Math.PI / 2;
+    roadMesh.position.z = 120;
+    roadGroup.add(roadMesh);
+
+    // Moving Lane Dashes
+    const dashGroup = new THREE.Group();
+    scene.add(dashGroup);
+    const dashMat = new THREE.MeshBasicMaterial({ color: 0xe2e8f0 });
+    for (let z = -40; z < 260; z += 12) {
+      [-6, 6].forEach(xPos => {
+        const d = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.05, 5), dashMat);
+        d.position.set(xPos, 0.03, z);
+        dashGroup.add(d);
+      });
+    }
+
+    // Highway Side Guardrails
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.7, roughness: 0.3 });
+    [-18, 18].forEach(xPos => {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.2, 400), railMat);
+      rail.position.set(xPos, 0.6, 120);
+      scene.add(rail);
+    });
+
+    // --- Helper Function to Build 3D Vehicles ---
+    function buildVehicle(colorHex, width, height, length, isTruck = false) {
+      const vg = new THREE.Group();
+      const bodyMat = new THREE.MeshPhysicalMaterial({
+        color: colorHex, metalness: 0.4, roughness: 0.25, clearcoat: 0.8
+      });
+      const base = new THREE.Mesh(new THREE.BoxGeometry(width, height * 0.55, length), bodyMat);
+      base.position.y = height * 0.4;
+      vg.add(base);
+
+      if (!isTruck) {
+        const cabin = new THREE.Mesh(
+          new THREE.BoxGeometry(width * 0.85, height * 0.45, length * 0.52),
+          new THREE.MeshPhysicalMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.1 })
+        );
+        cabin.position.set(0, height * 0.85, -length * 0.05);
+        vg.add(cabin);
+      } else {
+        const trailer = new THREE.Mesh(
+          new THREE.BoxGeometry(width * 0.96, height * 0.65, length * 0.75),
+          new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.4 })
+        );
+        trailer.position.set(0, height * 0.9, -length * 0.1);
+        vg.add(trailer);
+      }
+
+      // Wheels
+      const wGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.45, 16);
+      const wMat = new THREE.MeshStandardMaterial({ color: 0x090d16 });
+      [[-width/2, length*0.32], [width/2, length*0.32], [-width/2, -length*0.32], [width/2, -length*0.32]].forEach(([wx, wz]) => {
+        const w = new THREE.Mesh(wGeo, wMat);
+        w.rotation.z = Math.PI / 2;
+        w.position.set(wx, 0.65, wz);
+        vg.add(w);
+      });
+
+      // Detection Bounding Ring
+      const ringGeo = new THREE.RingGeometry(width * 0.75, width * 0.88, 32);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x22c55e, side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.08;
+      vg.add(ring);
+      vg.userData.ring = ring;
+
+      return vg;
+    }
+
+    // --- 1. EGO VEHICLE (With 77 GHz Patch Array in Front Bumper) ---
+    const egoCar = buildVehicle(0x0284c7, 3.6, 2.4, 7.5);
+    egoCar.position.set(0, 0, 0);
+    scene.add(egoCar);
+
+    // Glowing 77 GHz Patch Module on Ego Front Bumper Corner
+    const antModule = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 0.45, 0.25),
+      new THREE.MeshBasicMaterial({ color: 0xfbbf24 })
+    );
+    antModule.position.set(-1.1, 0.9, 3.8);
+    egoCar.add(antModule);
+
+    // Radar Beam Cone Extending from Front Bumper
+    const beamGroup = new THREE.Group();
+    beamGroup.position.set(-1.1, 0.9, 3.85);
+    egoCar.add(beamGroup);
+
+    const coneGeo = new THREE.ConeGeometry(8.5, 95, 32, 1, true);
+    coneGeo.translate(0, -47.5, 0);
+    coneGeo.rotateX(-Math.PI / 2);
+    const coneMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8, transparent: true, opacity: 0.24, side: THREE.DoubleSide, wireframe: false
+    });
+    const beamCone = new THREE.Mesh(coneGeo, coneMat);
+    beamGroup.add(beamCone);
+
+    const coneWire = new THREE.Mesh(
+      coneGeo,
+      new THREE.MeshBasicMaterial({ color: 0x7dd3fc, wireframe: true, transparent: true, opacity: 0.35 })
+    );
+    beamGroup.add(coneWire);
+
+    // 31-Beam Sector Floor Fan
+    const sectorGeo = new THREE.CircleGeometry(95, 48, Math.PI/4, Math.PI/2);
+    const sectorMat = new THREE.MeshBasicMaterial({
+      color: 0x0ea5e9, transparent: true, opacity: 0.14, side: THREE.DoubleSide
+    });
+    const sectorFan = new THREE.Mesh(sectorGeo, sectorMat);
+    sectorFan.rotation.x = -Math.PI / 2;
+    sectorFan.position.set(-1.1, 0.12, 3.85);
+    egoCar.add(sectorFan);
+
+    // --- 2. FOUR TARGET VEHICLES (Matching MATLAB Sector Scan Figure) ---
+    // Car A (Left Lane Cut-In Vehicle, initially at X = -11, Z = 38)
+    const carA = buildVehicle(0xef4444, 3.5, 2.4, 7.2);
+    carA.position.set(-11, 0, 38);
+    scene.add(carA);
+
+    // Car B (Center Lane Ahead, X = 0, Z = 55)
+    const carB = buildVehicle(0x3b82f6, 3.5, 2.4, 7.2);
+    carB.position.set(0, 0, 55);
+    scene.add(carB);
+
+    // Motorbike (Right Lane Close, X = 10.5, Z = 20)
+    const motorbike = buildVehicle(0xa855f7, 1.5, 1.9, 3.6);
+    motorbike.position.set(10.5, 0, 20);
+    scene.add(motorbike);
+
+    // Truck (Right Lane Far, X = 11.5, Z = 68)
+    const truck = buildVehicle(0xf97316, 4.2, 4.2, 13.0, true);
+    truck.position.set(11.5, 0, 68);
+    scene.add(truck);
+
+    const targets = [
+      { name: 'Car A (Cut-In)', mesh: carA, baseZ: 38, baseX: -11 },
+      { name: 'Car B (Center)', mesh: carB, baseZ: 55, baseX: 0 },
+      { name: 'Motorbike',      mesh: motorbike, baseZ: 20, baseX: 10.5 },
+      { name: 'Truck',          mesh: truck, baseZ: 68, baseX: 11.5 }
+    ];
+
+    // --- Simulation State ---
+    let radarMode = 31; // 0 = Fixed 0 deg, 6 = +6 deg Tilt, 31 = 31-Beam Scan
+    let cutInActive = false;
+    let cutInProgress = 0;
+    let egoSpeed = 25; // m/s (90 km/h)
+    let aebTriggered = false;
+    let collisionOccurred = false;
+
+    window.setRadarMode = function(m) {
+      radarMode = m;
+      document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
+      document.getElementById('mode-' + m).classList.add('active');
+      sectorFan.visible = (m === 31);
+      resetScenario();
+    };
+
+    window.triggerCutIn = function() {
+      resetScenario();
+      cutInActive = true;
+    };
+
+    window.resetScenario = function() {
+      cutInActive = false;
+      cutInProgress = 0;
+      egoSpeed = 25;
+      aebTriggered = false;
+      collisionOccurred = false;
+      carA.position.set(-11, 0, 38);
+      carA.rotation.y = 0;
+      const banner = document.getElementById('status-banner');
+      banner.style.borderColor = '#22c55e';
+      banner.style.color = '#4ade80';
+      banner.innerText = 'ADAS STATUS: CRUISING AT 90 KM/H | RADAR MONITORING ACTIVE';
+      document.getElementById('val-aeb').innerText = 'STANDBY (SAFE)';
+      document.getElementById('val-aeb').style.color = '#4ade80';
+    };
+
+    window.setCameraView = function(v) {
+      if (v === 'chase') {
+        camera.position.set(0, 26, -38);
+        controls.target.set(0, 2, 28);
+      } else if (v === 'bumper') {
+        camera.position.set(-6, 4, -4);
+        controls.target.set(-1.1, 1, 18);
+      } else if (v === 'top') {
+        camera.position.set(0, 115, 35);
+        controls.target.set(0, 0, 35);
+      }
+    };
+
+    // --- 2D Radar PPI Canvas Drawing ---
+    const ppiCanvas = document.getElementById('radar-ppi');
+    const ctx = ppiCanvas.getContext('2d');
+
+    function drawRadarPPI(currentBeamAngleDeg, detectedList) {
+      ctx.clearRect(0, 0, ppiCanvas.width, ppiCanvas.height);
+      const ox = ppiCanvas.width / 2;
+      const oy = ppiCanvas.height - 14;
+      const scale = 2.2;
+
+      // Range Rings (20m, 40m, 60m, 80m)
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.lineWidth = 1;
+      [20, 40, 60, 80].forEach(r => {
+        ctx.beginPath();
+        ctx.arc(ox, oy, r * scale, Math.PI * 1.25, Math.PI * 1.75);
+        ctx.stroke();
+      });
+
+      // Active Beam Wedge
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.rotate(THREE.MathUtils.degToRad(currentBeamAngleDeg));
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.28)';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, 82 * scale, -Math.PI/2 - 0.1, -Math.PI/2 + 0.1);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // Plot Targets
+      targets.forEach((t, idx) => {
+        const tx = ox - t.mesh.position.x * scale;
+        const ty = oy - t.mesh.position.z * scale;
+        const isDet = detectedList[idx];
+
+        ctx.beginPath();
+        ctx.arc(tx, ty, 5, 0, Math.PI * 2);
+        ctx.fillStyle = isDet ? '#22c55e' : '#ef4444';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+
+        ctx.fillStyle = isDet ? '#86efac' : '#fca5a5';
+        ctx.font = 'bold 10px Segoe UI';
+        ctx.fillText(t.name.split(' ')[0], tx + 7, ty + 3);
+      });
+    }
+
+    // --- Main Animation Loop ---
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const elapsed = clock.getElapsedTime();
+
+      // Move highway lane dashes to simulate forward speed
+      dashGroup.children.forEach(d => {
+        d.position.z -= egoSpeed * dt;
+        if (d.position.z < -40) d.position.z += 300;
+      });
+
+      // Compute Beam Angle
+      let beamDeg = 0;
+      if (radarMode === 0) {
+        beamDeg = 0;
+      } else if (radarMode === 6) {
+        // Steered toward Left-Lane Cut-In zone (+6 to +12 deg effective coverage)
+        beamDeg = -8;
+      } else {
+        // 31-Beam Phased Array Sweep (-45 to +45 deg in 3 deg steps)
+        const raw = Math.sin(elapsed * 3.2) * 45;
+        beamDeg = Math.round(raw / 3) * 3;
+      }
+      beamGroup.rotation.y = THREE.MathUtils.degToRad(beamDeg);
+
+      // Handle Cut-In Maneuver Physics
+      if (cutInActive && !collisionOccurred) {
+        cutInProgress += dt;
+        // Car A swerves from X = -11 into center lane X = 0 while decelerating
+        if (carA.position.x < -0.2) {
+          carA.position.x += 4.2 * dt;
+          carA.rotation.y = 0.18;
+        } else {
+          carA.rotation.y = 0;
+        }
+        // Relative closing speed between Ego Car and slower Car A
+        const relSpeed = egoSpeed - 12;
+        if (relSpeed > 0) {
+          carA.position.z -= relSpeed * dt;
+        }
+
+        // Check if Radar Mode detects Car A early enough!
+        // In Steered Mode (+6 deg or 31-Beam Scan), Car A is detected while still in adjacent lane (Z ~ 30m)
+        const banner = document.getElementById('status-banner');
+        if (radarMode === 6 || radarMode === 31) {
+          if (carA.position.x > -8.5 && carA.position.z < 34) {
+            aebTriggered = true;
+            egoSpeed = Math.max(12, egoSpeed - 18 * dt); // Smooth AEB Braking matches Car A speed at safe 18m gap!
+            banner.style.borderColor = '#eab308';
+            banner.style.color = '#fde047';
+            banner.innerText = '⚠️ STEERED BEAM DETECTED CUT-IN EARLY! AEB BRAKING ENGAGED — COLLISION AVOIDED!';
+            document.getElementById('val-aeb').innerText = 'ACTIVE BRAKING (SAFE)';
+            document.getElementById('val-aeb').style.color = '#fde047';
+          }
+        } else {
+          // Fixed 0 deg Beam only sees Car A when it is already directly in front (X > -1.5, Z < 11m) -> Too late!
+          if (carA.position.x > -1.8 && carA.position.z < 12) {
+            banner.style.borderColor = '#ef4444';
+            banner.style.color = '#fca5a5';
+            banner.innerText = '🚨 FIXED 0° BEAM BLIND SPOT FAILURE! LATE DETECTION — COLLISION RISK CRITICAL!';
+            document.getElementById('val-aeb').innerText = 'LATE ALERT (BLIND SPOT)';
+            document.getElementById('val-aeb').style.color = '#ef4444';
+          }
+          if (carA.position.z <= 8.2) {
+            collisionOccurred = true;
+            egoSpeed = 0;
+          }
+        }
+      }
+
+      // Evaluate Target Detection Status
+      const detectedFlags = targets.map((t, idx) => {
+        if (radarMode === 31) return true;
+        if (radarMode === 6) return (idx === 0 || idx === 1); // Detects Cut-In Car A + Center Car B
+        // Fixed 0 deg mode only detects target near X = 0
+        return Math.abs(t.mesh.position.x) < 2.0;
+      });
+
+      let detCount = 0;
+      detectedFlags.forEach((flag, idx) => {
+        if (flag) detCount++;
+        targets[idx].mesh.userData.ring.material.color.setHex(flag ? 0x22c55e : 0xef4444);
+      });
+
+      document.getElementById('val-speed').innerText = `${Math.round(egoSpeed * 3.6)} km/h (${egoSpeed.toFixed(1)} m/s)`;
+      document.getElementById('val-targets').innerText = `${detCount} / 4 Vehicles`;
+      document.getElementById('val-range').innerText = `${carA.position.z.toFixed(1)} m (Car A)`;
+
+      drawRadarPPI(beamDeg, detectedFlags);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
